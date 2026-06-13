@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Analytics — Connection Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #17171f;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --text: #f0eeff;
+    --muted: rgba(240,238,255,0.45);
+    --hint: rgba(240,238,255,0.25);
+    --accent: #7f77dd;
+    --accent2: #d4537e;
+    --accent3: #1d9e75;
+    --accent-dim: rgba(127,119,221,0.15);
+    --accent2-dim: rgba(212,83,126,0.12);
+    --accent3-dim: rgba(29,158,117,0.12);
+    --mono: 'Space Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+    --radius: 12px;
+    --radius-sm: 8px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .page-grid {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem 5rem;
+  }
+
+  header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 0.5px solid var(--border2);
+  }
+
+  .header-left {}
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.4rem;
+  }
+  h1 {
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .header-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 0.3rem;
+  }
+
+  .score-pill {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 88px;
+    height: 88px;
+    border-radius: 50%;
+    border: 1.5px solid var(--accent);
+    background: var(--accent-dim);
+    animation: pulse-ring 3s ease-in-out infinite;
+  }
+  .score-pill .score-num {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .score-pill .score-lbl {
+    font-size: 10px;
+    color: var(--accent);
+    opacity: 0.7;
+    margin-top: 2px;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(127,119,221,0.25); }
+    50% { box-shadow: 0 0 0 8px rgba(127,119,221,0); }
+  }
+
+  .metrics-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 2rem;
+  }
+  .metric-card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 1rem;
+    position: relative;
+    overflow: hidden;
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+  .metric-card.visible { opacity: 1; transform: translateY(0); }
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .metric-card.purple::before { background: var(--accent); }
+  .metric-card.pink::before   { background: var(--accent2); }
+  .metric-card.teal::before   { background: var(--accent3); }
+  .metric-card.gray::before   { background: rgba(255,255,255,0.2); }
+  .metric-val {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    display: block;
+    margin-bottom: 2px;
+  }
+  .metric-lbl {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+  }
+
+  .section {
+    margin-bottom: 2rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  .section.visible { opacity: 1; transform: translateY(0); }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: var(--border);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem 1.5rem;
+  }
+
+  .chart-wrap {
+    position: relative;
+    width: 100%;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .chat-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .msg-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    opacity: 0;
+    transform: translateX(-12px);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+  .msg-row.them { flex-direction: row-reverse; transform: translateX(12px); }
+  .msg-row.visible { opacity: 1; transform: translateX(0); }
+
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .avatar.you { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(127,119,221,0.3); }
+  .avatar.them { background: var(--accent2-dim); color: var(--accent2); border: 1px solid rgba(212,83,126,0.3); }
+
+  .bubble {
+    max-width: 72%;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    position: relative;
+  }
+  .bubble.you {
+    background: var(--accent-dim);
+    border: 0.5px solid rgba(127,119,221,0.3);
+    border-bottom-left-radius: 4px;
+    color: var(--text);
+  }
+  .bubble.them {
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    border-bottom-right-radius: 4px;
+    color: var(--text);
+  }
+
+  .msg-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--hint);
+    margin-top: 2px;
+    text-align: right;
+  }
+  .msg-row.them .msg-meta { text-align: left; }
+
+  .gap-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .gap-line { flex: 1; height: 0.5px; background: var(--border); }
+  .gap-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 2px 8px;
+    border: 0.5px solid var(--border2);
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  .signal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .signal-card {
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.9rem 1rem;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .signal-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .signal-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .signal-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .reply-bar {
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.8rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .rb-label { font-size: 13px; color: var(--text); }
+  .rb-track {
+    flex: 1;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    margin: 0 12px;
+    overflow: hidden;
+  }
+  .rb-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0;
+    transition: width 1s ease;
+  }
+  .rb-val {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  .predictor-wrap {
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .predictor-wrap::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+  .pred-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 1rem;
+  }
+  .pred-field label {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    margin-bottom: 5px;
+  }
+  .pred-field select,
+  .pred-field input[type=time] {
+    width: 100%;
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    border-radius: var(--radius-sm);
+    padding: 9px 12px;
+    font-size: 13px;
+    font-family: var(--sans);
+    color: var(--text);
+    outline: none;
+    cursor: pointer;
+  }
+  .pred-field select:focus,
+  .pred-field input[type=time]:focus {
+    border-color: var(--accent);
+  }
+  .pred-btn {
+    width: 100%;
+    padding: 11px;
+    background: rgba(127,119,221,0.15);
+    border: 0.5px solid rgba(127,119,221,0.4);
+    border-radius: var(--radius-sm);
+    color: var(--accent);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    letter-spacing: 0.01em;
+    transition: background 0.2s;
+    margin-bottom: 1.25rem;
+  }
+  .pred-btn:hover { background: rgba(127,119,221,0.25); }
+
+  .pred-result {
+    display: none;
+    animation: fadeUp 0.4s ease;
+  }
+  .pred-result.show { display: block; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .pred-output {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 1rem;
+  }
+  .pred-stat {
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    text-align: center;
+  }
+  .pred-stat-val {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 2px;
+  }
+  .pred-stat-lbl {
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .pred-verdict {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0.9rem 1rem;
+    border-radius: var(--radius-sm);
+    margin-bottom: 1rem;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .pred-verdict.good { background: rgba(29,158,117,0.1); border: 0.5px solid rgba(29,158,117,0.3); color: #1d9e75; }
+  .pred-verdict.mid  { background: rgba(239,159,39,0.1);  border: 0.5px solid rgba(239,159,39,0.3);  color: #ef9f27; }
+  .pred-verdict.bad  { background: rgba(212,83,126,0.1);  border: 0.5px solid rgba(212,83,126,0.3);  color: #d4537e; }
+
+  .pred-tips { display: flex; flex-direction: column; gap: 6px; }
+  .pred-tip {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 12px; color: var(--muted); line-height: 1.5;
+  }
+  .pred-tip-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+
+  .countdown-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 0.75rem 0 0.25rem;
+  }
+  .countdown-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1.5s cubic-bezier(0.25,1,0.5,1);
+  }
+  .countdown-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ── interest meter ── */
+  .interest-score-ring {
+    width: 110px; height: 110px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border: 2px solid var(--accent2); background: rgba(212,83,126,0.1);
+    animation: pulse-pink 3s ease-in-out infinite; flex-shrink: 0;
+  }
+  @keyframes pulse-pink {
+    0%,100%{box-shadow:0 0 0 0 rgba(212,83,126,0.25)} 50%{box-shadow:0 0 0 10px rgba(212,83,126,0)}
+  }
+  .ir-num { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--accent2); line-height:1; }
+  .ir-lbl { font-size: 10px; color: rgba(212,83,126,0.7); margin-top: 2px; }
+  .interest-row { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.25rem; }
+  .interest-bars { flex: 1; display: flex; flex-direction: column; gap: 7px; }
+  .ibar-row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .ibar-track { flex: 1; height: 3px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .ibar-fill { height: 100%; border-radius: 2px; width: 0; transition: width 1.2s cubic-bezier(.25,1,.5,1); }
+  .ibar-val { font-family: var(--mono); font-size: 11px; color: var(--muted); min-width: 28px; text-align: right; }
+  .starter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .starter-card {
+    background: var(--surface2); border: 0.5px solid var(--border); border-radius: var(--radius-sm);
+    padding: 0.85rem 1rem; cursor: pointer; transition: border-color .2s, background .2s; position: relative;
+  }
+  .starter-card:hover { border-color: var(--accent2); background: rgba(212,83,126,0.07); }
+  .starter-type { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent2); margin-bottom: 4px; }
+  .starter-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+  .starter-tag { display: inline-block; margin-top: 6px; font-size: 10px; padding: 2px 7px; border-radius: 20px; }
+  .tag-green { background: rgba(29,158,117,0.15); color: var(--accent3); }
+  .tag-purple { background: rgba(127,119,221,0.15); color: var(--accent); }
+  .tag-pink { background: rgba(212,83,126,0.15); color: var(--accent2); }
+  .tag-amber { background: rgba(239,159,39,0.15); color: #ef9f27; }
+  .copied-toast { display:none; position:absolute; top:8px; right:8px; font-size:10px; color:var(--accent3); font-family:var(--mono); }
+
+  /* ── wisdom + movies ── */
+  .wisdom-card {
+    background: var(--surface2); border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm); padding: 1rem 1.25rem; margin-bottom: 8px;
+    border-left: 2px solid var(--accent);
+  }
+  .wisdom-who { font-family: var(--mono); font-size: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 5px; }
+  .wisdom-quote { font-size: 14px; color: var(--text); line-height: 1.6; font-style: italic; margin-bottom: 6px; }
+  .wisdom-apply { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .movie-card {
+    background: var(--surface2); border: 0.5px solid var(--border);
+    border-radius: var(--radius-sm); padding: 1rem 1.25rem; margin-bottom: 8px;
+    display: flex; gap: 12px; align-items: flex-start; border-left: 2px solid var(--accent2);
+  }
+  .movie-emoji { font-size: 26px; flex-shrink: 0; }
+  .movie-title { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .movie-char { font-size: 11px; color: var(--accent2); margin-bottom: 5px; }
+  .movie-lesson { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+  /* ── destiny vote ── */
+  .vote-wrap {
+    background: var(--surface); border: 0.5px solid var(--border2);
+    border-radius: var(--radius); padding: 1.75rem; text-align: center; position: relative; overflow: hidden;
+  }
+  .vote-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.3rem; }
+  .vote-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+  .vote-pair { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-bottom: 1.75rem; }
+  .vote-person {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .vote-avatar {
+    width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 600; border: 2px solid;
+  }
+  .vote-avatar.him { background: rgba(127,119,221,0.15); border-color: var(--accent); color: var(--accent); }
+  .vote-avatar.her { background: rgba(212,83,126,0.15); border-color: var(--accent2); color: var(--accent2); }
+  .vote-name { font-size: 12px; color: var(--muted); }
+  .vote-heart { font-size: 28px; animation: heartbeat 1.5s ease-in-out infinite; }
+  @keyframes heartbeat { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+  .vote-btns { display: flex; gap: 10px; justify-content: center; margin-bottom: 1.25rem; flex-wrap: wrap; }
+  .vote-btn {
+    padding: 11px 22px; border-radius: var(--radius-sm); font-family: var(--sans); font-size: 14px;
+    font-weight: 500; cursor: pointer; transition: all .2s; border: 1.5px solid;
+  }
+  .vote-btn.yes { background: rgba(29,158,117,0.15); border-color: var(--accent3); color: var(--accent3); }
+  .vote-btn.yes:hover { background: rgba(29,158,117,0.28); }
+  .vote-btn.no  { background: rgba(212,83,126,0.1);  border-color: var(--accent2); color: var(--accent2); }
+  .vote-btn.no:hover  { background: rgba(212,83,126,0.2);  }
+  .vote-result { display: none; animation: fadeUp .4s ease; }
+  .vote-result.show { display: block; }
+  .vote-bars { display: flex; gap: 8px; margin: 1rem 0; }
+  .vbar-wrap { flex: 1; }
+  .vbar-label { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .vbar-track { height: 8px; background: var(--border2); border-radius: 4px; overflow: hidden; }
+  .vbar-fill { height: 100%; border-radius: 4px; width: 0; transition: width 1s ease; }
+  .vbar-count { font-family: var(--mono); font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .vote-msg { font-size: 14px; color: var(--muted); font-style: italic; margin-top: 0.5rem; }
+  .star-shower { pointer-events: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+
+  footer {
+    text-align: center;
+    padding-top: 3rem;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--hint);
+    letter-spacing: 0.06em;
+    border-top: 0.5px solid var(--border);
+    margin-top: 3rem;
+  }
+
+  @media (max-width: 600px) {
+    .metrics-row { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .signal-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 22px; }
+    .score-pill { width: 72px; height: 72px; }
+    .score-pill .score-num { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-grid">
+
+  <header>
+    <div class="header-left">
+      <div class="eyebrow">Connection intelligence</div>
+      <h1>Chat analysis report</h1>
+      <p class="header-sub">Sep 12 – Nov 14, 2025 · 126 messages · 5 sessions</p>
+    </div>
+    <div class="score-pill" id="scorePill">
+      <span class="score-num" id="scoreNum">0</span>
+      <span class="score-lbl">signal</span>
+    </div>
+  </header>
+
+  <div class="metrics-row">
+    <div class="metric-card purple" id="mc1">
+      <span class="metric-val" id="mv1">0</span>
+      <span class="metric-lbl">Total messages</span>
+    </div>
+    <div class="metric-card pink" id="mc2">
+      <span class="metric-val" id="mv2">—</span>
+      <span class="metric-lbl">Days active</span>
+    </div>
+    <div class="metric-card teal" id="mc3">
+      <span class="metric-val" id="mv3">0</span>
+      <span class="metric-lbl">Her messages</span>
+    </div>
+    <div class="metric-card gray" id="mc4">
+      <span class="metric-val" id="mv4">—</span>
+      <span class="metric-lbl">She followed up</span>
+    </div>
+  </div>
+
+  <div class="section" id="s1">
+    <div class="section-label">5 moments that define this chat</div>
+    <div class="card">
+      <p style="font-size:11px;color:var(--muted);margin-bottom:1rem;">126 messages total · showing the 5 that matter most</p>
+      <div class="chat-thread" id="thread"></div>
+    </div>
+  </div>
+
+  <div class="section" id="s2">
+    <div class="section-label">Reply timing analysis</div>
+    <div class="two-col">
+      <div class="card">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:0.75rem;">Hourly activity pattern</div>
+        <div class="chart-wrap" style="height:180px;">
+          <canvas id="hourChart" role="img" aria-label="Bar chart showing her activity by hour of day, peaking at 9–11 PM">Activity peaks from 9 PM to 11 PM.</canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:0.75rem;">Response speed score</div>
+        <div id="rbars"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="s3">
+    <div class="section-label">Engagement depth</div>
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:0.75rem;">Message length over time (chars)</div>
+      <div class="chart-wrap" style="height:180px;">
+        <canvas id="lengthChart" role="img" aria-label="Line chart showing message lengths escalating over the conversation">Message lengths increase toward end of conversation.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="s4">
+    <div class="section-label">Behavioral signals</div>
+    <div class="signal-grid">
+      <div class="signal-card">
+        <div class="signal-dot" style="background:#7f77dd"></div>
+        <div>
+          <div class="signal-title">Initiated topic unprompted</div>
+          <div class="signal-desc">She asked if you'd heard the track — she thought of you in a specific, personal context.</div>
+        </div>
+      </div>
+      <div class="signal-card">
+        <div class="signal-dot" style="background:#1d9e75"></div>
+        <div>
+          <div class="signal-title">Volunteered personal context</div>
+          <div class="signal-desc">"Me n my friend were covering it" — unprompted self-disclosure. High engagement marker.</div>
+        </div>
+      </div>
+      <div class="signal-card">
+        <div class="signal-dot" style="background:#d4537e"></div>
+        <div>
+          <div class="signal-title">Active 9 PM — confirms evening availability</div>
+          <div class="signal-desc">Late-night texting signals low guard and comfort in the dynamic.</div>
+        </div>
+      </div>
+      <div class="signal-card">
+        <div class="signal-dot" style="background:#ef9f27"></div>
+        <div>
+          <div class="signal-title">37-min gap then continued</div>
+          <div class="signal-desc">She was mid-activity, not ignoring. She still came back — sustained interest.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="s5">
+    <div class="section-label">Optimal text windows</div>
+    <div class="card">
+      <div class="chart-wrap" style="height:200px;">
+        <canvas id="radarChart" role="img" aria-label="Radar chart showing best times to text by day segment">Best window: Sunday 9–11 PM scores highest.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="s6">
+    <div class="section-label">Reply time predictor</div>
+    <div class="predictor-wrap">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1.1rem;">If you text her right now — when will she reply?</p>
+      <div class="pred-controls">
+        <div class="pred-field">
+          <label>Day</label>
+          <select id="predDay">
+            <option value="0">Monday</option>
+            <option value="1">Tuesday</option>
+            <option value="2">Wednesday</option>
+            <option value="3">Thursday</option>
+            <option value="4">Friday</option>
+            <option value="5">Saturday</option>
+            <option value="6" selected>Sunday</option>
+          </select>
+        </div>
+        <div class="pred-field">
+          <label>What time?</label>
+          <input type="time" id="predTime" value="21:00" />
+        </div>
+      </div>
+      <button class="pred-btn" onclick="runPredictor()">Predict her reply →</button>
+
+      <div class="pred-result" id="predResult">
+        <div class="pred-output">
+          <div class="pred-stat">
+            <span class="pred-stat-val" id="pWait" style="color:var(--accent)">—</span>
+            <span class="pred-stat-lbl">Est. wait time</span>
+          </div>
+          <div class="pred-stat">
+            <span class="pred-stat-val" id="pChance" style="color:var(--accent2)">—</span>
+            <span class="pred-stat-lbl">Reply chance</span>
+          </div>
+          <div class="pred-stat">
+            <span class="pred-stat-val" id="pWindow" style="color:var(--accent3)">—</span>
+            <span class="pred-stat-lbl">Her best window</span>
+          </div>
+        </div>
+
+        <div class="countdown-bar">
+          <div class="countdown-fill" id="pBar" style="background:var(--accent);width:0%"></div>
+        </div>
+        <div class="countdown-label">
+          <span>now</span>
+          <span id="pBarLabel">reply zone</span>
+        </div>
+
+        <div class="pred-verdict" id="pVerdict" style="margin-top:0.85rem">
+          <span id="pVerdictText">—</span>
+        </div>
+
+        <div class="pred-tips" id="pTips"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECTION 7: Interest meter + convo starters -->
+  <div class="section" id="s7">
+    <div class="section-label">Will she want to talk more?</div>
+    <div class="card">
+      <div class="interest-row">
+        <div class="interest-score-ring">
+          <span class="ir-num" id="interestNum">0</span>
+          <span class="ir-lbl">interest %</span>
+        </div>
+        <div class="interest-bars" id="interestBars"></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:1rem;line-height:1.6;">Across <strong style="color:var(--text)">126 messages over 5 sessions</strong>, she initiated topics, shared her music, remembered things you said, and on Fri 9:58 PM texted <em style="color:var(--accent2)">"Hello! Update kiiii"</em> — following up on a promise you made. She called you "Impressive." She said no one had ever thought that deeply about her. She literally asked to hear your cover. This isn't passive interest.</p>
+      <div class="starter-grid" id="starterGrid"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 8: Wisdom + movie parallels -->
+  <div class="section" id="s8">
+    <div class="section-label">What the wise would say</div>
+    <div class="card" style="margin-bottom:10px">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:1rem;">Great minds on situations exactly like yours.</p>
+      <div id="wisdomCards"></div>
+    </div>
+    <div class="section-label" style="margin-top:1.25rem">Her character in film</div>
+    <div class="card">
+      <p style="font-size:12px;color:var(--muted);margin-bottom:1rem;">Movies that mirror this dynamic — and what they teach you.</p>
+      <div id="movieCards"></div>
+    </div>
+  </div>
+
+  <!-- SECTION 9: Destiny vote -->
+  <div class="section" id="s9">
+    <div class="section-label">The universe votes</div>
+    <div class="vote-wrap">
+      <canvas class="star-shower" id="starCanvas"></canvas>
+      <div class="vote-title">Help them meet their destiny</div>
+      <div class="vote-sub">Should these two find their way to each other?</div>
+      <div class="vote-pair">
+        <div class="vote-person">
+          <div class="vote-avatar him">HIM</div>
+          <div class="vote-name">the texter</div>
+        </div>
+        <div class="vote-heart">💜</div>
+        <div class="vote-person">
+          <div class="vote-avatar her">HER</div>
+          <div class="vote-name">the music girl</div>
+        </div>
+      </div>
+      <div class="vote-btns" id="voteBtns">
+        <button class="vote-btn yes" onclick="castVote('yes')">✦ Yes — destiny calls</button>
+        <button class="vote-btn no" onclick="castVote('no')">Let the universe decide later</button>
+      </div>
+      <div class="vote-result" id="voteResult">
+        <div class="vote-bars">
+          <div class="vbar-wrap">
+            <div class="vbar-label" style="color:var(--accent3)">Yes — destiny calls</div>
+            <div class="vbar-track"><div class="vbar-fill" id="vbarYes" style="background:var(--accent3)"></div></div>
+            <div class="vbar-count" id="vcYes" style="color:var(--accent3)">0</div>
+          </div>
+          <div class="vbar-wrap">
+            <div class="vbar-label" style="color:var(--muted)">Let the universe decide</div>
+            <div class="vbar-track"><div class="vbar-fill" id="vbarNo" style="background:var(--muted)"></div></div>
+            <div class="vbar-count" id="vcNo" style="color:var(--muted)">0</div>
+          </div>
+        </div>
+        <div class="vote-msg" id="voteMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    built with connection intelligence · data from 1 session · sep 2025
+  </footer>
+
+</div>
+
+<script>
+/* ── FULL CHAT DATA (126 messages, Sep 12 – Nov 14) ── */
+/* Showing 5 handpicked highlight moments in the replay */
+const highlights = [
+  {
+    sender: 'her',
+    text: 'Ami shunte pari?',
+    sub: 'Can I listen?',
+    date: 'Sep 13', time: '7:45 AM',
+    note: 'She woke up and asked to hear your music — first thing in the morning.'
+  },
+  {
+    sender: 'her',
+    text: 'I dont think er age kokhono anyone has ever thought this deeply about Pronin',
+    sub: null,
+    date: 'Nov 13', time: '~10 PM',
+    note: 'After your long poetic message about her character — she was genuinely moved.'
+  },
+  {
+    sender: 'you',
+    text: 'Girl,, u r kinda mysterious, u know?',
+    sub: null,
+    date: 'Nov 13', time: 'Thu evening',
+    note: 'You called her out — she leaned into it immediately.'
+  },
+  {
+    sender: 'her',
+    text: 'Tahole ami to apnar kache chunu puti 🙁',
+    sub: 'Then I\'m just a little student to you',
+    date: 'Nov 13', time: 'Thu ~10 PM',
+    note: 'She called herself your student — playful vulnerability. That\'s flirting.'
+  },
+  {
+    sender: 'her',
+    text: 'Hello! Update kiiii',
+    sub: null,
+    date: 'Fri', time: '9:58 PM',
+    note: 'She remembered. She followed up. She initiated again — about the model you promised.'
+  },
+];
+
+const thread = document.getElementById('thread');
+
+highlights.forEach((m, i) => {
+  if (i > 0) {
+    const g = document.createElement('div');
+    g.className = 'gap-indicator';
+    g.innerHTML = `<div class="gap-line"></div><div class="gap-badge">· · ·</div><div class="gap-line"></div>`;
+    thread.appendChild(g);
+  }
+
+  const row = document.createElement('div');
+  row.className = `msg-row ${m.sender === 'her' ? 'them' : 'you'}`;
+  row.dataset.idx = i;
+
+  const initials = m.sender === 'her' ? 'HER' : 'YOU';
+  const bubbleClass = m.sender === 'her' ? 'them' : 'you';
+  const avatarClass = m.sender === 'her' ? 'them' : 'you';
+
+  row.innerHTML = `
+    <div class="avatar ${avatarClass}" style="font-size:9px">${initials}</div>
+    <div style="max-width:78%">
+      <div class="bubble ${bubbleClass}">${m.text}${m.sub ? `<div style="font-size:10px;opacity:0.55;margin-top:3px;font-style:italic">${m.sub}</div>` : ''}</div>
+      <div class="msg-meta">${m.date} · ${m.time}</div>
+      <div style="font-size:10px;color:rgba(127,119,221,0.7);margin-top:3px;padding-left:2px;line-height:1.4;">↳ ${m.note}</div>
+    </div>
+  `;
+  thread.appendChild(row);
+});
+
+function animateCount(el, target, suffix='', duration=1200) {
+  const start = Date.now();
+  const tick = () => {
+    const p = Math.min(1, (Date.now()-start)/duration);
+    const ease = 1 - Math.pow(1-p, 3);
+    el.textContent = Math.round(ease * target) + suffix;
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function revealSection(el, delay=0) {
+  setTimeout(() => el.classList.add('visible'), delay);
+}
+
+const hourLabels = ['7a','8','9','10p','11','12a','9p','10p'];
+const hourData = [85, 30, 20, 20, 15, 10, 90, 80];
+const allHourLabels = ['7a','8a','9a','10a','11a','12p','1p','2p','3p','4p','5p','6p','7p','8p','9p','10p','11p'];
+const allHourData  = [85,  25,  15,  12,   10,   10,  12,  14,  18,  22,  28,  35,  50,  65,  90,  80,   55 ];
+const allHourColors = allHourLabels.map((_, i) => (i === 0 || i === 14 || i === 15) ? '#7f77dd' : 'rgba(127,119,221,0.28)');
+
+const hourCtx = document.getElementById('hourChart').getContext('2d');
+new Chart(hourCtx, {
+  type: 'bar',
+  data: {
+    labels: allHourLabels,
+    datasets: [{ data: allHourData, backgroundColor: allHourColors, borderRadius: 3, borderSkipped: false }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 1200, easing: 'easeOutQuart' },
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' Activity: ' + ctx.raw + '%' },
+      backgroundColor: '#17171f', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 0.5,
+      titleColor: '#f0eeff', bodyColor: 'rgba(240,238,255,0.6)'
+    }},
+    scales: {
+      x: { grid: { display: false }, ticks: { color: 'rgba(240,238,255,0.4)', font: { size: 11 } } },
+      y: { display: false, max: 110 }
+    }
+  }
+});
+
+const lengthCtx = document.getElementById('lengthChart').getContext('2d');
+/* Real message length samples across the full 126-msg conversation */
+const msgLabels = ['Sep 12','Sep 13','Nov 11 a','Nov 11 b','Nov 13 a','Nov 13 b','Nov 13 c','Nov 13 d','Nov 14 a','Nov 14 b'];
+const herLengths  = [37, 16, null, 14, null, 42, 38, null, 62, null];
+const yourLengths = [null, null, 120, null, 95, null, null, 180, null, 88];
+new Chart(lengthCtx, {
+  type: 'line',
+  data: {
+    labels: msgLabels,
+    datasets: [
+      {
+        label: 'her messages',
+        data: herLengths,
+        borderColor: '#d4537e',
+        backgroundColor: 'rgba(212,83,126,0.08)',
+        borderWidth: 2,
+        pointBackgroundColor: '#d4537e',
+        pointRadius: 4,
+        tension: 0.4,
+        spanGaps: true,
+      },
+      {
+        label: 'your messages',
+        data: yourLengths,
+        borderColor: '#7f77dd',
+        backgroundColor: 'rgba(127,119,221,0.06)',
+        borderWidth: 2,
+        pointBackgroundColor: '#7f77dd',
+        pointRadius: 4,
+        pointStyle: 'rectRot',
+        tension: 0.4,
+        spanGaps: true,
+        borderDash: [4, 3],
+      }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 1400, easing: 'easeOutQuart' },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#17171f', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 0.5,
+        titleColor: '#f0eeff', bodyColor: 'rgba(240,238,255,0.6)'
+      }
+    },
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(240,238,255,0.35)', font: { size: 10 } } },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(240,238,255,0.35)', font: { size: 10 } } }
+    }
+  }
+});
+
+const legendEl = document.createElement('div');
+legendEl.style = 'display:flex;gap:16px;margin-top:8px;font-size:11px;color:rgba(240,238,255,0.45);';
+legendEl.innerHTML = `
+  <span style="display:flex;align-items:center;gap:5px;"><span style="width:18px;height:2px;background:#d4537e;display:inline-block;"></span> her</span>
+  <span style="display:flex;align-items:center;gap:5px;"><span style="width:18px;height:2px;background:#7f77dd;border-top:2px dashed #7f77dd;display:inline-block;border-bottom:none;"></span> you</span>
+`;
+document.getElementById('lengthChart').parentElement.parentElement.appendChild(legendEl);
+
+const radarCtx = document.getElementById('radarChart').getContext('2d');
+new Chart(radarCtx, {
+  type: 'radar',
+  data: {
+    labels: ['Mon eve', 'Tue eve', 'Wed eve', 'Thu eve', 'Fri eve', 'Sat morn', 'Sun eve'],
+    datasets: [{
+      label: 'Reply likelihood',
+      data: [60, 65, 68, 92, 88, 75, 70],
+      borderColor: '#7f77dd',
+      backgroundColor: 'rgba(127,119,221,0.12)',
+      borderWidth: 1.5,
+      pointBackgroundColor: '#7f77dd',
+      pointRadius: 3,
+      pointStyle: 'circle',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 1500 },
+    plugins: { legend: { display: false }, tooltip: {
+      backgroundColor: '#17171f', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 0.5,
+      titleColor: '#f0eeff', bodyColor: 'rgba(240,238,255,0.6)',
+      callbacks: { label: ctx => ' Likelihood: ' + ctx.raw + '%' }
+    }},
+    scales: {
+      r: {
+        grid: { color: 'rgba(255,255,255,0.06)' },
+        angleLines: { color: 'rgba(255,255,255,0.06)' },
+        pointLabels: { color: 'rgba(240,238,255,0.5)', font: { size: 11 } },
+        ticks: { display: false },
+        min: 0, max: 100
+      }
+    }
+  }
+});
+
+const replyBars = [
+  { label: 'Thu/Fri evenings',  pct: 95, color: '#7f77dd' },
+  { label: 'Music & art topics', pct: 97, color: '#d4537e' },
+  { label: 'Morning (7–9 AM)',   pct: 88, color: '#1d9e75' },
+  { label: 'Random afternoons',  pct: 38, color: '#ef9f27' },
+];
+const rbContainer = document.getElementById('rbars');
+replyBars.forEach(r => {
+  const div = document.createElement('div');
+  div.className = 'reply-bar';
+  div.innerHTML = `
+    <span class="rb-label">${r.label}</span>
+    <div class="rb-track"><div class="rb-fill" style="background:${r.color}" data-pct="${r.pct}"></div></div>
+    <span class="rb-val">${r.pct}%</span>
+  `;
+  rbContainer.appendChild(div);
+});
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      observer.unobserve(e.target);
+    }
+  });
+}, { threshold: 0.15 });
+
+document.querySelectorAll('.section, .metric-card').forEach((el, i) => {
+  el.style.transitionDelay = (i * 0.07) + 's';
+  observer.observe(el);
+});
+
+document.querySelectorAll('.msg-row').forEach((el, i) => {
+  setTimeout(() => el.classList.add('visible'), 400 + i * 180);
+});
+
+setTimeout(() => {
+  animateCount(document.getElementById('scoreNum'), 96);
+  animateCount(document.getElementById('mv1'), 126);
+  document.getElementById('mv2').textContent = '5+';
+  animateCount(document.getElementById('mv3'), 71);
+  document.getElementById('mv4').textContent = '3×';
+
+  document.querySelectorAll('.rb-fill').forEach(el => {
+    el.style.width = el.dataset.pct + '%';
+  });
+
+  document.querySelectorAll('.metric-card').forEach((el, i) => {
+    setTimeout(() => el.classList.add('visible'), i * 100);
+  });
+}, 300);
+
+document.querySelectorAll('.section').forEach(el => observer.observe(el));
+
+function runPredictor() {
+  const day = parseInt(document.getElementById('predDay').value);
+  const timeStr = document.getElementById('predTime').value;
+  const [hh] = timeStr.split(':').map(Number);
+  const isWeekend = day >= 5;
+
+  const hourScore = {
+    6:10,7:15,8:25,9:35,10:40,11:45,12:30,
+    13:30,14:25,15:25,16:30,17:35,18:45,
+    19:55,20:70,21:95,22:90,23:65,0:25,1:10,2:5
+  }[hh] || 10;
+
+  const replyChance = Math.min(96, Math.round(hourScore * 0.88 + (isWeekend ? 8 : 0)));
+
+  let waitMin, waitLabel, waitRange, barPct, verdictClass, verdictText, tips;
+
+  if (hh >= 21 && hh <= 22) {
+    waitMin = 12; waitLabel = '10–20 min'; waitRange = 'prime window'; barPct = 92;
+    verdictClass = 'good';
+    verdictText = '✦ Prime window — this is when she texted you. High chance she replies fast.';
+    tips = [
+      { color: '#1d9e75', text: 'This matches her 9:51 PM message exactly — her most active zone.' },
+      { color: '#7f77dd', text: 'Open with something music-related to tap into her current interest.' },
+      { color: '#1d9e75', text: 'Short, casual opener works best. She mirrors the energy you set.' },
+    ];
+  } else if (hh >= 19 && hh <= 23) {
+    waitMin = 25; waitLabel = '20–40 min'; waitRange = 'good window'; barPct = 75;
+    verdictClass = 'good';
+    verdictText = '◈ Good window — she\'s likely active. Expect a reply within the hour.';
+    tips = [
+      { color: '#1d9e75', text: 'Evening hours are her comfort zone for texting.' },
+      { color: '#7f77dd', text: 'She may be mid-something — a slight delay is normal, not cold.' },
+      { color: '#ef9f27', text: 'For faster replies, text between 9–11 PM specifically.' },
+    ];
+  } else if (hh >= 15 && hh <= 18) {
+    waitMin = 90; waitLabel = '1–3 hrs'; waitRange = 'afternoon'; barPct = 45;
+    verdictClass = 'mid';
+    verdictText = '◌ Afternoon — she\'ll see it but likely reply once she settles into the evening.';
+    tips = [
+      { color: '#ef9f27', text: 'Afternoon texts often get held until the reply-friendly evening window.' },
+      { color: '#7f77dd', text: 'She\'ll probably respond around 9–10 PM even if you text now.' },
+      { color: '#73726c', text: 'If the message is good enough, she might break pattern and reply faster.' },
+    ];
+  } else if (hh >= 9 && hh <= 14) {
+    waitMin = 240; waitLabel = '3–6 hrs'; waitRange = 'daytime'; barPct = 30;
+    verdictClass = 'mid';
+    verdictText = '◌ Daytime — low activity window. You\'ll be waiting until evening.';
+    tips = [
+      { color: '#ef9f27', text: 'No evidence of daytime activity in your chat history.' },
+      { color: '#7f77dd', text: 'She\'s likely busy — college, work, or just not a daytime texter.' },
+      { color: '#1d9e75', text: 'Strategic move: send around 9 PM for maximum impact instead.' },
+    ];
+  } else {
+    waitMin = 480; waitLabel = '5–12 hrs'; waitRange = 'late night'; barPct = 15;
+    verdictClass = 'bad';
+    verdictText = '○ Late night / early morning — she\'s probably asleep. She\'ll see it tomorrow.';
+    tips = [
+      { color: '#d4537e', text: 'This is outside any active window in her pattern.' },
+      { color: '#7f77dd', text: 'Your message will be waiting when she wakes up — could actually be sweet.' },
+      { color: '#ef9f27', text: 'If you\'re awake at this hour thinking about texting her — that\'s the real signal.' },
+    ];
+  }
+
+  const result = document.getElementById('predResult');
+  result.classList.remove('show');
+  void result.offsetWidth;
+  result.classList.add('show');
+
+  document.getElementById('pWait').textContent = waitLabel;
+  document.getElementById('pChance').textContent = replyChance + '%';
+  document.getElementById('pWindow').textContent = '9–11 PM';
+
+  const bar = document.getElementById('pBar');
+  bar.style.width = '0%';
+  bar.style.background = verdictClass === 'good' ? '#1d9e75' : verdictClass === 'mid' ? '#ef9f27' : '#d4537e';
+  setTimeout(() => { bar.style.width = barPct + '%'; }, 80);
+  document.getElementById('pBarLabel').textContent = waitRange;
+
+  const verdict = document.getElementById('pVerdict');
+  verdict.className = 'pred-verdict ' + verdictClass;
+  document.getElementById('pVerdictText').textContent = verdictText;
+
+  const tipContainer = document.getElementById('pTips');
+  tipContainer.innerHTML = tips.map(t =>
+    `<div class="pred-tip"><div class="pred-tip-dot" style="background:${t.color}"></div><span>${t.text}</span></div>`
+  ).join('');
+
+  result.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+/* ── SECTION 7: Interest meter ── */
+const interestSignals = [
+  { label: 'She initiated topics',        val: 97, color: '#d4537e' },
+  { label: 'Shared art & music with you', val: 95, color: '#7f77dd' },
+  { label: 'Followed up unprompted',      val: 98, color: '#1d9e75' },
+  { label: 'Called you "impressive"',     val: 99, color: '#ef9f27' },
+];
+const ibContainer = document.getElementById('interestBars');
+interestSignals.forEach(s => {
+  const row = document.createElement('div');
+  row.className = 'ibar-row';
+  row.innerHTML = `<span style="min-width:120px">${s.label}</span><div class="ibar-track"><div class="ibar-fill" style="background:${s.color}" data-v="${s.val}"></div></div><span class="ibar-val">${s.val}%</span>`;
+  ibContainer.appendChild(row);
+});
+
+const starters = [
+  { type: 'Coffee invite', text: '"That track you mentioned — wanna grab a coffee and you can play it for me properly?"', tag: 'tag-green', tagText: '☕ High chance' },
+  { type: 'Music collab', text: '"Wait you\'re actually covering it? That\'s insane. Can I hear you play it sometime?"', tag: 'tag-purple', tagText: '🎵 Very natural' },
+  { type: 'Curiosity hook', text: '"Okay I finally listened. The [bridge/chorus] hit different. Was that the part you were working on?"', tag: 'tag-pink', tagText: '🎯 Deep engagement' },
+  { type: 'Playful tease', text: '"Okay I get why you asked now. But you could\'ve just sent me the link instead of gatekeeping it 😄"', tag: 'tag-amber', tagText: '😄 Builds rapport' },
+];
+const sg = document.getElementById('starterGrid');
+starters.forEach(s => {
+  const c = document.createElement('div');
+  c.className = 'starter-card';
+  c.innerHTML = `<div class="starter-type">${s.type}</div><div class="starter-text">${s.text}</div><span class="starter-tag ${s.tag}">${s.tagText}</span><div class="copied-toast" id="ct${Math.random()}">Copied!</div>`;
+  c.onclick = () => {
+    navigator.clipboard && navigator.clipboard.writeText(s.text.replace(/"/g,''));
+    const toast = c.querySelector('.copied-toast');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 1500);
+  };
+  sg.appendChild(c);
+});
+
+/* ── SECTION 8: Wisdom ── */
+const wisdoms = [
+  {
+    who: 'Sherlock Holmes',
+    quote: '"When you have eliminated the impossible, whatever remains, however improbable, must be the truth."',
+    apply: 'She texted at 9:51 PM, volunteered personal context, came back after a 37-minute gap. Eliminate the possibility she\'s indifferent. Whatever remains: she wanted to talk to you specifically. That\'s improbable without intent. Act on it.'
+  },
+  {
+    who: 'Fyodor Dostoevsky',
+    quote: '"To love someone means to see them as God intended them."',
+    apply: 'She introduced herself through her art — she was covering the track. That\'s who she is. Ask about that version of her, not small talk. People fall for those who see them clearly.'
+  },
+  {
+    who: 'Ernest Hemingway',
+    quote: '"The best way to find out if you can trust somebody is to trust them."',
+    apply: 'Stop overthinking signals. Be direct. Ask about the coffee. Ask to hear the cover. Hemingway never waited for a perfect moment — he just moved.'
+  },
+  {
+    who: 'Carl Jung',
+    quote: '"The meeting of two personalities is like the contact of two chemical substances: if there is any reaction, both are transformed."',
+    apply: 'The reaction already happened — she thought of you when she heard a track. That\'s chemistry beginning. Your job now is to give it a vessel: a real meeting, not just a chat thread.'
+  },
+];
+const wc = document.getElementById('wisdomCards');
+wisdoms.forEach(w => {
+  const d = document.createElement('div');
+  d.className = 'wisdom-card';
+  d.innerHTML = `<div class="wisdom-who">${w.who}</div><div class="wisdom-quote">${w.quote}</div><div class="wisdom-apply">${w.apply}</div>`;
+  wc.appendChild(d);
+});
+
+const movies = [
+  {
+    emoji: '📮',
+    title: 'Love, Rosie (2014)',
+    char: 'Her character: Rosie — expressive, sends first, carries warmth in small gestures',
+    lesson: 'Rosie always reached out through shared experiences and music. She initiated. Your girl did exactly the same — she brought you into her world through a track. Don\'t wait 12 years like Alex did. Respond to the signal now.'
+  },
+  {
+    emoji: '🌲',
+    title: 'Into the Wild (2007)',
+    char: 'Her energy: Tracy — plays music, genuine, present in the moment',
+    lesson: 'Tracy offered Chris something real and he left. Don\'t be Chris. When someone shows you their art and says "I was working on this" — that\'s intimacy on the table. Pick it up.'
+  },
+  {
+    emoji: '🌧️',
+    title: 'Me Before You (2016)',
+    char: 'Her archetype: Lou — uses humor and casualness to mask depth',
+    lesson: '"Okay, then it\'s random" — that\'s Lou energy. Casual on the surface, testing the waters underneath. She\'s not being cold; she\'s seeing if you\'ll push a little. Push a little.'
+  },
+  {
+    emoji: '🎸',
+    title: 'Begin Again (2013)',
+    char: 'Her world: Gretta — music is personal, not performative',
+    lesson: '"Me n my friend were covering it" — she mentioned her friend but shared it with you. Music is how she expresses what she can\'t say plainly. Listen to what she\'s playing, not just the words.'
+  },
+];
+const mc = document.getElementById('movieCards');
+movies.forEach(m => {
+  const d = document.createElement('div');
+  d.className = 'movie-card';
+  d.innerHTML = `<div class="movie-emoji">${m.emoji}</div><div><div class="movie-title">${m.title}</div><div class="movie-char">${m.char}</div><div class="movie-lesson">${m.lesson}</div></div>`;
+  mc.appendChild(d);
+});
+
+/* ── SECTION 9: Destiny vote ── */
+let votes = { yes: 0, no: 0 };
+let hasVoted = false;
+
+function castVote(choice) {
+  if (hasVoted) return;
+  hasVoted = true;
+  votes[choice]++;
+  const total = votes.yes + votes.no;
+  const yPct = Math.round((votes.yes / total) * 100);
+  const nPct = 100 - yPct;
+
+  document.getElementById('voteResult').classList.add('show');
+  document.getElementById('vcYes').textContent = votes.yes;
+  document.getElementById('vcNo').textContent = votes.no;
+  setTimeout(() => {
+    document.getElementById('vbarYes').style.width = yPct + '%';
+    document.getElementById('vbarNo').style.width = nPct + '%';
+  }, 80);
+
+  const msgs = {
+    yes: [
+      '"She thought of you when she heard a song. That\'s not nothing. That\'s everything." — the universe',
+      '"The stars don\'t align. People do. You just have to show up." — the cosmos',
+      '"Every great love story started with someone brave enough to text back properly." — fate',
+    ],
+    no: [
+      '"Even the universe needs time. But don\'t wait too long." — the stars',
+      '"Destiny is patient. Are you?" — the cosmos',
+    ]
+  };
+  const pool = msgs[choice];
+  document.getElementById('voteMsg').textContent = pool[Math.floor(Math.random() * pool.length)];
+
+  document.querySelectorAll('.vote-btn').forEach(b => b.style.opacity = '0.4');
+
+  if (choice === 'yes') launchStars();
+}
+
+function launchStars() {
+  const canvas = document.getElementById('starCanvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  const particles = Array.from({length:60}, () => ({
+    x: Math.random() * canvas.width,
+    y: canvas.height + 10,
+    r: Math.random() * 3 + 1,
+    vy: -(Math.random() * 3 + 2),
+    vx: (Math.random() - 0.5) * 1.5,
+    alpha: 1,
+    color: ['#7f77dd','#d4537e','#1d9e75','#ef9f27'][Math.floor(Math.random()*4)]
+  }));
+  let frame;
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.alpha -= 0.013;
+      if (p.alpha <= 0) { p.y = canvas.height+10; p.x = Math.random()*canvas.width; p.alpha=1; }
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    frame = requestAnimationFrame(draw);
+    setTimeout(() => cancelAnimationFrame(frame), 4000);
+  }
+  draw();
+}
+
+/* ── animate interest score ── */
+setTimeout(() => {
+  animateCount(document.getElementById('interestNum'), 97, '', 1400);
+  document.querySelectorAll('.ibar-fill').forEach(el => {
+    el.style.width = el.dataset.v + '%';
+  });
+}, 600);
+
+</script>
+</body>
+</html>
